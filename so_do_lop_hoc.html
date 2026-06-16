@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sắp Xếp Chỗ Ngồi Phòng Học - A4 Dọc</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container { max-width: 1300px; margin: 0 auto; }
+
+        .header { text-align: center; color: white; margin-bottom: 15px; }
+        .header h1 { font-size: 2.2em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); margin-bottom: 5px; }
+        .header p { font-size: 1em; opacity: 0.9; }
+
+        .toolbar {
+            background: white; border-radius: 15px; padding: 12px 20px;
+            margin-bottom: 15px; display: flex; flex-wrap: wrap;
+            gap: 8px; align-items: center; justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .toolbar button {
+            padding: 8px 16px; border: none; border-radius: 25px;
+            cursor: pointer; font-size: 13px; font-weight: 600;
+            transition: all 0.3s ease; display: flex; align-items: center; gap: 5px;
+        }
+        .toolbar button:hover { transform: translateY(-2px); }
+
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-primary:hover { box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .btn-success { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; }
+        .btn-success:hover { box-shadow: 0 5px 15px rgba(56, 239, 125, 0.4); }
+        .btn-warning { background: linear-gradient(135deg, #f093fb, #f5576c); color: white; }
+        .btn-warning:hover { box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4); }
+        .btn-info { background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; }
+        .btn-info:hover { box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4); }
+        .btn-purple { background: linear-gradient(135deg, #a18cd1, #fbc2eb); color: white; }
+        .btn-purple:hover { box-shadow: 0 5px 15px rgba(161, 140, 209, 0.4); }
+
+        .classroom {
+            background: white; border-radius: 20px; padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative;
+        }
+
+        .teacher-row {
+            display: flex; justify-content: space-between; margin-bottom: 20px;
+            min-height: 75px; gap: 20px;
+        }
+
+        .teacher-slot {
+            flex: 1; max-width: 250px; min-height: 70px;
+            border: 3px dashed #ff9800; border-radius: 15px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s ease; cursor: pointer;
+            background: rgba(255, 152, 0, 0.05);
+        }
+        .teacher-slot:hover { border-style: solid; background: rgba(255, 152, 0, 0.1); }
+        .teacher-slot.active { border: none; background: none; cursor: default; }
+        .teacher-slot.drop-target {
+            border-style: solid; border-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+            transform: scale(1.05);
+        }
+
+        .teacher-desk {
+            background: linear-gradient(135deg, #ff9a9e, #fecfef);
+            border: 4px solid #e91e63; border-radius: 15px;
+            padding: 10px 20px; text-align: center; cursor: move;
+            transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(233, 30, 99, 0.3);
+            width: 100%;
+        }
+        .teacher-desk:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(233, 30, 99, 0.4); }
+        .teacher-desk h3 { color: #880e4f; font-size: 0.95em; margin-bottom: 3px; }
+        .teacher-desk .teacher-name { font-size: 0.95em; color: #333; font-weight: 600; }
+
+        /* Lưới 6 hàng × 4 cột - TỐI ƯU CHO A4 DỌC */
+        .seating-grid {
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(6, auto);
+            gap: 12px 10px; 
+            padding: 10px;
+        }
+
+        .desk {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            border: 2.5px solid #1565c0; 
+            border-radius: 10px;
+            padding: 8px; 
+            transition: all 0.3s ease;
+            position: relative; 
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .desk::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0;
+            height: 3px; background: linear-gradient(90deg, #1565c0, #42a5f5);
+        }
+        .desk:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(21, 101, 192, 0.3); }
+        .desk.selected-desk {
+            border: 3px solid #9c27b0;
+            background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+            animation: pulseDesk 1s infinite;
+        }
+        .desk.drag-over { 
+            background: linear-gradient(135deg, #c8e6c9, #a5d6a7); 
+            border-color: #2e7d32; 
+            border-width: 3px; 
+            transform: scale(1.03); 
+        }
+        .desk.dragging { opacity: 0.5; transform: scale(0.95); }
+
+        @keyframes pulseDesk {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(156, 39, 176, 0.5); }
+            50% { box-shadow: 0 0 0 8px rgba(156, 39, 176, 0); }
+        }
+
+        .desk-number {
+            text-align: center; font-size: 0.72em; color: #0d47a1;
+            font-weight: 700; margin-bottom: 6px;
+            background: rgba(21, 101, 192, 0.15); 
+            padding: 3px 6px; 
+            border-radius: 6px;
+            border: 1px solid #1976d2;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            z-index: 2;
+        }
+        .desk-number:hover {
+            background: rgba(21, 101, 192, 0.3);
+            transform: scale(1.05);
+        }
+
+        .seats { display: flex; gap: 6px; }
+
+        .seat {
+            flex: 1; 
+            background: white; 
+            border: 2.5px dashed #64b5f6;
+            border-radius: 7px; 
+            padding: 6px 4px; 
+            text-align: center;
+            cursor: pointer; 
+            transition: all 0.3s ease; 
+            min-height: 44px;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            font-size: 0.8em; 
+            font-weight: 500; 
+            color: #333; 
+            word-break: break-word;
+        }
+        .seat:hover { border-style: solid; border-color: #1565c0; background: #e8f5e9; }
+        .seat.occupied {
+            border-style: solid; 
+            border-color: #2e7d32;
+            border-width: 2.5px;
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            color: #1b5e20; 
+            font-weight: 700;
+        }
+        .seat.selected {
+            border: 3px solid #ff9800; 
+            background: #fff3e0;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.5); }
+            50% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
+        }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.6);
+            z-index: 1000; align-items: center; justify-content: center;
+        }
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: white; border-radius: 20px; padding: 30px;
+            width: 90%; max-width: 400px; text-align: center;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-content h3 { margin-bottom: 15px; color: #333; }
+        .modal-content input {
+            width: 100%; padding: 12px 15px; border: 2px solid #ddd;
+            border-radius: 10px; font-size: 16px; margin-bottom: 15px;
+            transition: border-color 0.3s;
+        }
+        .modal-content input:focus { outline: none; border-color: #667eea; }
+
+        .modal-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .modal-buttons button {
+            padding: 10px 20px; border: none; border-radius: 25px;
+            cursor: pointer; font-weight: 600; transition: all 0.3s;
+        }
+
+        .instructions {
+            background: rgba(255,255,255,0.95); border-radius: 15px;
+            padding: 20px; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .instructions h3 { color: #333; margin-bottom: 10px; }
+        .instructions ul { 
+            list-style: none; padding: 0; 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; 
+        }
+        .instructions li { 
+            padding: 5px 0; color: #555; 
+            display: flex; align-items: center; gap: 8px; 
+            font-size: 0.9em; 
+        }
+
+        .swap-mode-seat {
+            background: linear-gradient(135deg, #ff9800, #ff5722) !important;
+            color: white !important; animation: glow 1.5s infinite;
+        }
+        .swap-mode-desk {
+            background: linear-gradient(135deg, #9c27b0, #e91e63) !important;
+            color: white !important; animation: glow 1.5s infinite;
+        }
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 152, 0, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 152, 0, 0.8); }
+        }
+
+        .stats { display: flex; justify-content: center; gap: 15px; margin-top: 15px; flex-wrap: wrap; }
+        .stat-item {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; padding: 6px 15px; border-radius: 20px;
+            font-weight: 600; font-size: 0.85em;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .toolbar, .instructions, .header p, .mode-indicator, .printing-hidden { display: none !important; }
+            .classroom { box-shadow: none; border-radius: 0; }
+            .desk:hover, .seat:hover { transform: none; box-shadow: none; }
+        }
+
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: #333; color: white; padding: 12px 24px;
+            border-radius: 10px; z-index: 2000;
+            animation: fadeInOut 3s ease; font-weight: 500;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(20px); }
+        }
+
+        .divider {
+            width: 1px; height: 30px; background: #ddd; margin: 0 5px;
+        }
+
+        .mode-indicator {
+            position: fixed; top: 20px; right: 20px;
+            padding: 10px 20px; border-radius: 25px;
+            color: white; font-weight: 700; z-index: 999;
+            animation: glow 1.5s infinite;
+            display: none;
+        }
+        .mode-indicator.active { display: block; }
+        .mode-indicator.seat-mode { background: linear-gradient(135deg, #ff9800, #ff5722); }
+        .mode-indicator.desk-mode { background: linear-gradient(135deg, #9c27b0, #e91e63); }
+
+        .printing-hidden { display: none !important; }
+
+        /* Visually hidden nhưng screen reader vẫn đọc được */
+        .sr-only {
+            position: absolute; width: 1px; height: 1px;
+            padding: 0; margin: -1px; overflow: hidden;
+            clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+        }
+
+        .roll-animation {
+            animation: rollEffect 0.4s ease;
+        }
+        @keyframes rollEffect {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(10px); }
+            100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Sắp Xếp Chỗ Ngồi Phòng Học</h1>
+            <p>6 hàng ngang × 4 cột dọc | 24 bàn × 2 chỗ = 48 chỗ ngồi</p>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn-info" id="swapSeatBtn" onclick="toggleSwapMode('seat')">👤 Hoán đổi chỗ</button>
+            <button class="btn-purple" id="swapDeskBtn" onclick="toggleSwapMode('desk')">🪑 Hoán đổi bàn</button>
+            <div class="divider"></div>
+            <button class="btn-success" onclick="rollDown()" title="Di chuyển xuống 1 hàng">⬇️ Cuộn xuống</button>
+            <button class="btn-success" onclick="rollUp()" title="Di chuyển lên 1 hàng">⬆️ Cuộn lên</button>
+            <button class="btn-success" onclick="rollRight()" title="Di chuyển sang phải 1 cột">➡️ Cuộn phải</button>
+            <button class="btn-success" onclick="rollLeft()" title="Di chuyển sang trái 1 cột">⬅️ Cuộn trái</button>
+            <div class="divider"></div>
+            <button class="btn-warning" onclick="shuffleSeats()">🎲 Ngẫu nhiên</button>
+            <button class="btn-success" onclick="exportPDF()">📄 Xuất PDF (A4)</button>
+            <button class="btn-warning" onclick="clearAll()">🗑️ Xóa tất cả</button>
+        </div>
+
+        <div class="classroom" id="classroom">
+            <div class="teacher-row" id="teacherRow">
+                <div class="teacher-slot" id="teacherSlotLeft" onclick="handleTeacherSlotClick('left')" 
+                     ondragover="event.preventDefault(); this.classList.add('drop-target')"
+                     ondragleave="this.classList.remove('drop-target')"
+                     ondrop="handleTeacherDrop(event, 'left')">
+                    <span style="color:#ff9800; font-weight:600;">📍 Góc trái</span>
+                </div>
+                <div class="teacher-slot" id="teacherSlotRight" onclick="handleTeacherSlotClick('right')"
+                     ondragover="event.preventDefault(); this.classList.add('drop-target')"
+                     ondragleave="this.classList.remove('drop-target')"
+                     ondrop="handleTeacherDrop(event, 'right')">
+                    <span style="color:#ff9800; font-weight:600;">📍 Góc phải</span>
+                </div>
+            </div>
+
+            <div class="seating-grid" id="seatingGrid"></div>
+
+            <div class="stats">
+                <span class="stat-item">👥 Tổng: 48 chỗ</span>
+                <span class="stat-item" id="filledCount">📝 Đã điền: 0</span>
+                <span class="stat-item" id="emptyCount">⬜ Còn trống: 48</span>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Hướng dẫn sử dụng:</h3>
+            <ul>
+                <li>✨ <strong>Click chỗ trống</strong> để nhập tên học sinh</li>
+                <li>✏️ <strong>Click vào tên bàn</strong> để đổi tên bàn</li>
+                <li>🔄 <strong>Hoán đổi chỗ:</strong> Bật chế độ → click 2 chỗ để đổi vị trí</li>
+                <li>🪑 <strong>Hoán đổi bàn:</strong> Bật chế độ → click 2 bàn để đổi cả 2 chỗ (và tên bàn)</li>
+                <li>⬇️ <strong>Cuộn:</strong> Di chuyển toàn bộ học sinh VÀ tên bàn theo chiều dọc/ngang</li>
+                <li>🖱️ <strong>Bàn GV:</strong> Kéo thả hoặc click vào góc để di chuyển</li>
+                <li>📄 <strong>Xuất PDF:</strong> Lưu sơ đồ dạng file PDF khổ A4 dọc (sạch, không thừa)</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="modal" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+        <div class="modal-content">
+            <h3 id="editModalTitle">📝 Điền tên học sinh</h3>
+            <label for="nameInput" class="sr-only">Tên học sinh</label>
+            <input type="text" id="nameInput" placeholder="Nhập tên học sinh..." onkeydown="if(event.key==='Enter') saveName()">
+            <div class="modal-buttons">
+                <button class="btn-success" onclick="saveName()">💾 Lưu</button>
+                <button class="btn-warning" onclick="deleteName()">🗑️ Xóa</button>
+                <button style="background:#ccc;" onclick="closeModal()">❌ Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="teacherModal" role="dialog" aria-modal="true" aria-labelledby="teacherModalTitle">
+        <div class="modal-content">
+            <h3 id="teacherModalTitle">👨‍🏫 Tên Giáo Viên</h3>
+            <label for="teacherInput" class="sr-only">Tên giáo viên</label>
+            <input type="text" id="teacherInput" placeholder="Nhập tên giáo viên..." onkeydown="if(event.key==='Enter') saveTeacherName()">
+            <div class="modal-buttons">
+                <button class="btn-success" onclick="saveTeacherName()">💾 Lưu</button>
+                <button style="background:#ccc;" onclick="closeTeacherModal()">❌ Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="deskNameModal" role="dialog" aria-modal="true" aria-labelledby="deskNameModalTitle">
+        <div class="modal-content">
+            <h3 id="deskNameModalTitle">🏷️ Đặt tên cho bàn</h3>
+            <label for="deskNameInput" class="sr-only">Tên bàn</label>
+            <input type="text" id="deskNameInput" placeholder="VD: Bàn tổ 1, Bàn nhóm A..." onkeydown="if(event.key==='Enter') saveDeskName()">
+            <div class="modal-buttons">
+                <button class="btn-success" onclick="saveDeskName()">💾 Lưu</button>
+                <button class="btn-warning" onclick="resetDeskName()">🔄 Đặt lại mặc định</button>
+                <button style="background:#ccc;" onclick="closeDeskNameModal()">❌ Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mode-indicator seat-mode" id="seatModeIndicator">👤 CHẾ ĐỘ HOÁN ĐỔI CHỖ</div>
+    <div class="mode-indicator desk-mode" id="deskModeIndicator">🪑 CHẾ ĐỘ HOÁN ĐỔI BÀN</div>
+
+    <script>
+        const ROWS = 6;
+        const COLS = 4;
+        const TOTAL_SEATS = ROWS * COLS * 2;
+
+        let seats = {};
+        let deskNames = {};
+        let teacherPos = 'left';
+        let teacherName = 'GV Chủ Nhiệm'; // lưu trong bộ nhớ, đồng bộ với localStorage
+        let swapMode = null;
+        let selectedSeat = null;
+        let selectedDesk = null;
+        let currentEditSeat = null;
+        let currentEditDesk = null;
+        let draggedTeacherDesk = false;
+        let isExporting = false; // Cờ chống double-export
+
+        // Hàm escape HTML để tránh XSS
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function init() {
+            loadFromStorage();
+            renderTeacher();
+            renderSeats();
+            updateStats();
+        }
+
+
+        function renderTeacher() {
+            const leftSlot = document.getElementById('teacherSlotLeft');
+            const rightSlot = document.getElementById('teacherSlotRight');
+            
+            leftSlot.innerHTML = '<span style="color:#ff9800; font-weight:600;">📍 Góc trái</span>';
+            rightSlot.innerHTML = '<span style="color:#ff9800; font-weight:600;">📍 Góc phải</span>';
+            leftSlot.classList.remove('active');
+            rightSlot.classList.remove('active');
+
+            const safeTeacherName = escapeHTML(teacherName);
+            const teacherHTML = `
+                <div class="teacher-desk" id="teacherDesk" 
+                     draggable="true" 
+                     onclick="editTeacherName(event)">
+                    <h3>👨‍🏫 Bàn Giáo Viên</h3>
+                    <div class="teacher-name">${safeTeacherName}</div>
+                </div>`;
+
+            if (teacherPos === 'left') {
+                leftSlot.innerHTML = teacherHTML;
+                leftSlot.classList.add('active');
+            } else {
+                rightSlot.innerHTML = teacherHTML;
+                rightSlot.classList.add('active');
+            }
+
+            const desk = document.getElementById('teacherDesk');
+            if (desk) {
+                desk.addEventListener('dragstart', (e) => {
+                    draggedTeacherDesk = true;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', 'teacher');
+                });
+                desk.addEventListener('dragend', () => {
+                    draggedTeacherDesk = false;
+                });
+            }
+        }
+
+        function handleTeacherSlotClick(slot) {
+            if (slot !== teacherPos) {
+                teacherPos = slot;
+                localStorage.setItem('teacherPos', teacherPos);
+                renderTeacher();
+                showToast(teacherPos === 'left' ? '⬅️ Bàn GV → Góc TRÁI' : '➡️ Bàn GV → Góc PHẢI');
+            } else {
+                editTeacherName();
+            }
+        }
+
+        function handleTeacherDrop(e, slot) {
+            e.preventDefault();
+            document.getElementById('teacherSlotLeft').classList.remove('drop-target');
+            document.getElementById('teacherSlotRight').classList.remove('drop-target');
+            
+            if (draggedTeacherDesk && slot !== teacherPos) {
+                teacherPos = slot;
+                localStorage.setItem('teacherPos', teacherPos);
+                renderTeacher();
+                showToast(teacherPos === 'left' ? '⬅️ Đã kéo bàn GV → TRÁI' : '➡️ Đã kéo bàn GV → PHẢI');
+            }
+            draggedTeacherDesk = false;
+        }
+
+        function editTeacherName(e) {
+            if (e) e.stopPropagation();
+            document.getElementById('teacherInput').value = teacherName;
+            document.getElementById('teacherModal').classList.add('active');
+            setTimeout(() => document.getElementById('teacherInput').focus(), 100);
+        }
+
+        function saveTeacherName() {
+            const name = document.getElementById('teacherInput').value.trim();
+            teacherName = name || 'GV Chủ Nhiệm';
+            localStorage.setItem('teacherName', teacherName);
+            closeTeacherModal();
+            renderTeacher();
+            showToast('💾 Đã lưu tên giáo viên');
+        }
+
+        function closeTeacherModal() {
+            document.getElementById('teacherModal').classList.remove('active');
+        }
+
+        function getDeskLabel(row, col, deskNum) {
+            const customName = deskNames[`${row}-${col}`];
+            if (customName) return customName;
+            return `Bàn ${deskNum} | Hàng ${row} - Cột ${col}`;
+        }
+
+        function renderSeats() {
+            const grid = document.getElementById('seatingGrid');
+            grid.innerHTML = '';
+            let deskNum = 1;
+            
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    const desk = document.createElement('div');
+                    desk.className = 'desk';
+                    desk.id = `desk-${row}-${col}`;
+                    desk.dataset.row = row;
+                    desk.dataset.col = col;
+                    
+                    const seat1Id = `${row}-${col}-1`;
+                    const seat2Id = `${row}-${col}-2`;
+                    const seat1Name = seats[seat1Id] || '';
+                    const seat2Name = seats[seat2Id] || '';
+                    const deskLabel = escapeHTML(getDeskLabel(row, col, deskNum));
+                    const safe1 = escapeHTML(seat1Name);
+                    const safe2 = escapeHTML(seat2Name);
+                    
+                    desk.innerHTML = `
+                        <div class="desk-number" data-row="${row}" data-col="${col}">${deskLabel}</div>
+                        <div class="seats">
+                            <div class="seat ${seat1Name ? 'occupied' : ''}" 
+                                 id="seat-${seat1Id}"
+                                 data-id="${seat1Id}">
+                                ${safe1 || '🪑'}
+                            </div>
+                            <div class="seat ${seat2Name ? 'occupied' : ''}" 
+                                 id="seat-${seat2Id}"
+                                 data-id="${seat2Id}">
+                                ${safe2 || '🪑'}
+                            </div>
+                        </div>`;
+                    grid.appendChild(desk);
+                    deskNum++;
+                }
+            }
+            attachEvents();
+        }
+
+        function attachEvents() {
+            document.querySelectorAll('.seat').forEach(seatEl => {
+                seatEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (swapMode === 'desk') {
+                        showToast('⚠️ Đang ở chế độ HOÁN ĐỔI BÀN. Hãy click vào BÀN!');
+                        return;
+                    }
+                    handleSeatClick(seatEl.dataset.id);
+                });
+            });
+
+            document.querySelectorAll('.desk-number').forEach(labelEl => {
+                labelEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = labelEl.dataset.row;
+                    const col = labelEl.dataset.col;
+                    editDeskName(row, col);
+                });
+            });
+
+            document.querySelectorAll('.desk').forEach(deskEl => {
+                deskEl.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('desk-number')) return;
+                    if (e.target.classList.contains('seat')) return;
+                    
+                    if (swapMode === 'desk') {
+                        e.stopPropagation();
+                        const row = deskEl.dataset.row;
+                        const col = deskEl.dataset.col;
+                        handleDeskClick(row, col, deskEl);
+                    } else if (swapMode === 'seat') {
+                        e.stopPropagation();
+                        showToast('⚠️ Đang ở chế độ HOÁN ĐỔI CHỖ. Hãy click vào CHỖ!');
+                    }
+                });
+            });
+        }
+
+        function handleSeatClick(seatId) {
+            if (swapMode === 'seat') {
+                if (selectedSeat === null) {
+                    selectedSeat = seatId;
+                    document.getElementById(`seat-${seatId}`).classList.add('selected');
+                    showToast('👆 Chọn chỗ thứ 2 để hoán đổi');
+                } else if (selectedSeat === seatId) {
+                    document.getElementById(`seat-${seatId}`).classList.remove('selected');
+                    selectedSeat = null;
+                    showToast('❌ Đã hủy chọn');
+                } else {
+                    swapSeats(selectedSeat, seatId);
+                    document.getElementById(`seat-${selectedSeat}`)?.classList.remove('selected');
+                    selectedSeat = null;
+                    showToast('✅ Đã hoán đổi 2 chỗ ngồi!');
+                }
+            } else {
+                currentEditSeat = seatId;
+                document.getElementById('nameInput').value = seats[seatId] || '';
+                document.getElementById('editModal').classList.add('active');
+                setTimeout(() => document.getElementById('nameInput').focus(), 100);
+            }
+        }
+
+        function handleDeskClick(row, col, deskEl) {
+            const deskKey = `${row}-${col}`;
+            if (selectedDesk === null) {
+                selectedDesk = deskKey;
+                deskEl.classList.add('selected-desk');
+                showToast(`🪑 Đã chọn Bàn Hàng ${row}-Cột ${col}. Chọn bàn thứ 2`);
+            } else if (selectedDesk === deskKey) {
+                deskEl.classList.remove('selected-desk');
+                selectedDesk = null;
+                showToast('❌ Đã hủy chọn bàn');
+            } else {
+                const firstDeskEl = document.getElementById(`desk-${selectedDesk.split('-')[0]}-${selectedDesk.split('-')[1]}`);
+                if (firstDeskEl) firstDeskEl.classList.remove('selected-desk');
+                swapDesks(selectedDesk, deskKey);
+                selectedDesk = null;
+                showToast('✅ Đã hoán đổi 2 BÀN (cả 4 chỗ và tên bàn)!');
+            }
+        }
+
+        function swapSeats(seat1, seat2) {
+            const temp = seats[seat1];
+            seats[seat1] = seats[seat2];
+            seats[seat2] = temp;
+            if (!seats[seat1]) delete seats[seat1];
+            if (!seats[seat2]) delete seats[seat2];
+            saveToStorage();
+            renderSeats();
+            updateStats();
+        }
+
+        function swapDesks(desk1Key, desk2Key) {
+            const [r1, c1] = desk1Key.split('-');
+            const [r2, c2] = desk2Key.split('-');
+            
+            const s1_1 = `${r1}-${c1}-1`;
+            const s1_2 = `${r1}-${c1}-2`;
+            const s2_1 = `${r2}-${c2}-1`;
+            const s2_2 = `${r2}-${c2}-2`;
+            
+            let temp = seats[s1_1];
+            seats[s1_1] = seats[s2_1];
+            seats[s2_1] = temp;
+            
+            temp = seats[s1_2];
+            seats[s1_2] = seats[s2_2];
+            seats[s2_2] = temp;
+            
+            [s1_1, s1_2, s2_1, s2_2].forEach(k => { if (!seats[k]) delete seats[k]; });
+            
+            const tempName = deskNames[desk1Key];
+            deskNames[desk1Key] = deskNames[desk2Key];
+            deskNames[desk2Key] = tempName;
+            if (!deskNames[desk1Key]) delete deskNames[desk1Key];
+            if (!deskNames[desk2Key]) delete deskNames[desk2Key];
+            
+            saveToStorage();
+            renderSeats();
+            updateStats();
+        }
+
+        function editDeskName(row, col) {
+            currentEditDesk = `${row}-${col}`;
+            const currentName = deskNames[currentEditDesk] || '';
+            document.getElementById('deskNameInput').value = currentName;
+            document.getElementById('deskNameModal').classList.add('active');
+            setTimeout(() => document.getElementById('deskNameInput').focus(), 100);
+        }
+
+        function saveDeskName() {
+            const name = document.getElementById('deskNameInput').value.trim();
+            if (name) {
+                deskNames[currentEditDesk] = name;
+            } else {
+                delete deskNames[currentEditDesk];
+            }
+            saveToStorage();
+            closeDeskNameModal();   // đóng trước (reset currentEditDesk)
+            renderSeats();
+            showToast(name ? '💾 Đã lưu tên bàn' : '🔄 Đã đặt lại mặc định');
+        }
+
+        function resetDeskName() {
+            delete deskNames[currentEditDesk];
+            saveToStorage();
+            closeDeskNameModal();   // đóng trước (reset currentEditDesk)
+            renderSeats();
+            showToast('🔄 Đã đặt lại tên mặc định');
+        }
+
+        function closeDeskNameModal() {
+            document.getElementById('deskNameModal').classList.remove('active');
+            currentEditDesk = null;
+        }
+
+        function toggleSwapMode(mode) {
+            if (swapMode === mode) {
+                swapMode = null;
+                document.getElementById('swapSeatBtn').classList.remove('swap-mode-seat');
+                document.getElementById('swapDeskBtn').classList.remove('swap-mode-desk');
+                document.getElementById('seatModeIndicator').classList.remove('active');
+                document.getElementById('deskModeIndicator').classList.remove('active');
+                
+                if (selectedSeat) {
+                    document.getElementById(`seat-${selectedSeat}`)?.classList.remove('selected');
+                    selectedSeat = null;
+                }
+                if (selectedDesk) {
+                    const [r, c] = selectedDesk.split('-');
+                    document.getElementById(`desk-${r}-${c}`)?.classList.remove('selected-desk');
+                    selectedDesk = null;
+                }
+                showToast(`❌ Đã tắt chế độ hoán đổi`);
+                return;
+            }
+
+            if (swapMode) {
+                document.getElementById(swapMode === 'seat' ? 'swapSeatBtn' : 'swapDeskBtn')
+                    .classList.remove(`swap-mode-${swapMode}`);
+                if (selectedSeat) {
+                    document.getElementById(`seat-${selectedSeat}`)?.classList.remove('selected');
+                    selectedSeat = null;
+                }
+                if (selectedDesk) {
+                    const [r, c] = selectedDesk.split('-');
+                    document.getElementById(`desk-${r}-${c}`)?.classList.remove('selected-desk');
+                    selectedDesk = null;
+                }
+            }
+
+            swapMode = mode;
+            const btnId = mode === 'seat' ? 'swapSeatBtn' : 'swapDeskBtn';
+            document.getElementById(btnId).classList.add(`swap-mode-${mode}`);
+            document.getElementById(mode === 'seat' ? 'seatModeIndicator' : 'deskModeIndicator').classList.add('active');
+            document.getElementById(mode === 'seat' ? 'deskModeIndicator' : 'seatModeIndicator').classList.remove('active');
+
+            showToast(mode === 'seat' 
+                ? '👤 HOÁN ĐỔI CHỖ - Click 2 chỗ bất kỳ' 
+                : '🪑 HOÁN ĐỔI BÀN - Click 2 bàn để đổi cả 2 chỗ');
+        }
+
+        // === CUỘN (Cả học sinh VÀ tên bàn) ===
+        function rollDown() {
+            const newSeats = {};
+            const newDeskNames = {};
+            
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    const newRow = row === ROWS ? 1 : row + 1;
+                    for (let seat = 1; seat <= 2; seat++) {
+                        const oldKey = `${row}-${col}-${seat}`;
+                        const newKey = `${newRow}-${col}-${seat}`;
+                        if (seats[oldKey]) newSeats[newKey] = seats[oldKey];
+                    }
+                    // Cuộn tên bàn
+                    const oldDeskKey = `${row}-${col}`;
+                    const newDeskKey = `${newRow}-${col}`;
+                    if (deskNames[oldDeskKey]) newDeskNames[newDeskKey] = deskNames[oldDeskKey];
+                }
+            }
+            seats = newSeats;
+            deskNames = newDeskNames;
+            saveToStorage();
+            renderSeats();
+            animateRoll();
+            showToast('⬇️ Đã cuộn XUỐNG (học sinh + tên bàn)');
+        }
+
+        function rollUp() {
+            const newSeats = {};
+            const newDeskNames = {};
+            
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    const newRow = row === 1 ? ROWS : row - 1;
+                    for (let seat = 1; seat <= 2; seat++) {
+                        const oldKey = `${row}-${col}-${seat}`;
+                        const newKey = `${newRow}-${col}-${seat}`;
+                        if (seats[oldKey]) newSeats[newKey] = seats[oldKey];
+                    }
+                    const oldDeskKey = `${row}-${col}`;
+                    const newDeskKey = `${newRow}-${col}`;
+                    if (deskNames[oldDeskKey]) newDeskNames[newDeskKey] = deskNames[oldDeskKey];
+                }
+            }
+            seats = newSeats;
+            deskNames = newDeskNames;
+            saveToStorage();
+            renderSeats();
+            animateRoll();
+            showToast('⬆️ Đã cuộn LÊN (học sinh + tên bàn)');
+        }
+
+        function rollRight() {
+            const newSeats = {};
+            const newDeskNames = {};
+            
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    const newCol = col === COLS ? 1 : col + 1;
+                    for (let seat = 1; seat <= 2; seat++) {
+                        const oldKey = `${row}-${col}-${seat}`;
+                        const newKey = `${row}-${newCol}-${seat}`;
+                        if (seats[oldKey]) newSeats[newKey] = seats[oldKey];
+                    }
+                    const oldDeskKey = `${row}-${col}`;
+                    const newDeskKey = `${row}-${newCol}`;
+                    if (deskNames[oldDeskKey]) newDeskNames[newDeskKey] = deskNames[oldDeskKey];
+                }
+            }
+            seats = newSeats;
+            deskNames = newDeskNames;
+            saveToStorage();
+            renderSeats();
+            animateRoll();
+            showToast('➡️ Đã cuộn PHẢI (học sinh + tên bàn)');
+        }
+
+        function rollLeft() {
+            const newSeats = {};
+            const newDeskNames = {};
+            
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    const newCol = col === 1 ? COLS : col - 1;
+                    for (let seat = 1; seat <= 2; seat++) {
+                        const oldKey = `${row}-${col}-${seat}`;
+                        const newKey = `${row}-${newCol}-${seat}`;
+                        if (seats[oldKey]) newSeats[newKey] = seats[oldKey];
+                    }
+                    const oldDeskKey = `${row}-${col}`;
+                    const newDeskKey = `${row}-${newCol}`;
+                    if (deskNames[oldDeskKey]) newDeskNames[newDeskKey] = deskNames[oldDeskKey];
+                }
+            }
+            seats = newSeats;
+            deskNames = newDeskNames;
+            saveToStorage();
+            renderSeats();
+            animateRoll();
+            showToast('⬅️ Đã cuộn TRÁI (học sinh + tên bàn)');
+        }
+
+        function animateRoll() {
+            const grid = document.getElementById('seatingGrid');
+            grid.classList.add('roll-animation');
+            setTimeout(() => grid.classList.remove('roll-animation'), 400);
+        }
+
+        function saveName() {
+            const name = document.getElementById('nameInput').value.trim();
+            if (name) {
+                seats[currentEditSeat] = name;
+            } else {
+                delete seats[currentEditSeat];
+            }
+            closeModal();       // đóng trước (reset currentEditSeat)
+            saveToStorage();
+            renderSeats();
+            updateStats();
+            showToast(name ? '💾 Đã lưu tên' : '🗑️ Đã xóa');
+        }
+
+        function deleteName() {
+            delete seats[currentEditSeat];
+            closeModal();       // đóng trước (reset currentEditSeat)
+            saveToStorage();
+            renderSeats();
+            updateStats();
+            showToast('🗑️ Đã xóa tên');
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+            currentEditSeat = null;
+        }
+
+        function clearAll() {
+            if (confirm('Bạn có chắc muốn xóa tất cả tên học sinh?\n(Tên bàn tùy chỉnh vẫn được giữ lại)')) {
+                seats = {};
+                saveToStorage();
+                renderSeats();
+                updateStats();
+                showToast('🗑️ Đã xóa tất cả tên học sinh');
+            }
+        }
+
+        function shuffleSeats() {
+            const names = Object.values(seats).filter(n => n);
+            if (names.length === 0) {
+                showToast('⚠️ Chưa có tên để xáo trộn');
+                return;
+            }
+            const positions = [];
+            for (let row = 1; row <= ROWS; row++) {
+                for (let col = 1; col <= COLS; col++) {
+                    positions.push(`${row}-${col}-1`);
+                    positions.push(`${row}-${col}-2`);
+                }
+            }
+            for (let i = names.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [names[i], names[j]] = [names[j], names[i]];
+            }
+            seats = {};
+            positions.forEach((pos, index) => {
+                if (index < names.length) seats[pos] = names[index];
+            });
+            saveToStorage();
+            renderSeats();
+            updateStats();
+            showToast('🎲 Đã xáo trộn ngẫu nhiên!');
+        }
+
+        function exportPDF() {
+            if (isExporting) {
+                showToast('⏳ Đang xuất, vui lòng chờ...');
+                return;
+            }
+            isExporting = true;
+
+            // Vô hiệu hóa nút xuất PDF để tránh bấm nhiều lần
+            const exportBtn = document.querySelector('button[onclick="exportPDF()"]');
+            if (exportBtn) {
+                exportBtn.disabled = true;
+                exportBtn.style.opacity = '0.6';
+                exportBtn.style.cursor = 'not-allowed';
+            }
+
+            showToast('⏳ Đang tạo PDF...');
+
+            const element = document.getElementById('classroom');
+            const origShadow = element.style.boxShadow;
+
+            // Khai báo indicators TRƯỚC restoreUI để closure không bị ReferenceError
+            const indicators = document.querySelectorAll('.mode-indicator');
+
+            // Xác định slot GV rỗng (không phải vị trí đang đặt bàn GV)
+            const emptySlotId = teacherPos === 'left' ? 'teacherSlotRight' : 'teacherSlotLeft';
+            const emptySlot = document.getElementById(emptySlotId);
+            // Lưu lại style gốc để khôi phục
+            const emptySlotOrigVisibility = emptySlot ? emptySlot.style.visibility : '';
+            const emptySlotOrigBorder = emptySlot ? emptySlot.style.border : '';
+            const emptySlotOrigBackground = emptySlot ? emptySlot.style.background : '';
+
+            // Hàm khôi phục trạng thái UI — dùng chung cho mọi luồng kết thúc
+            function restoreUI() {
+                element.style.boxShadow = origShadow;
+                indicators.forEach(i => i.classList.remove('printing-hidden'));
+                if (emptySlot) {
+                    emptySlot.style.visibility = emptySlotOrigVisibility;
+                    emptySlot.style.border = emptySlotOrigBorder;
+                    emptySlot.style.background = emptySlotOrigBackground;
+                }
+                if (exportBtn) {
+                    exportBtn.disabled = false;
+                    exportBtn.style.opacity = '';
+                    exportBtn.style.cursor = '';
+                }
+                isExporting = false;
+            }
+
+            // Ẩn các element thừa trước khi chụp
+            element.style.boxShadow = 'none';
+            indicators.forEach(i => i.classList.add('printing-hidden'));
+
+            // Ẩn slot GV rỗng bằng visibility (giữ nguyên layout, không làm lệch vị trí bàn GV)
+            if (emptySlot) {
+                emptySlot.style.visibility = 'hidden';
+                emptySlot.style.border = 'none';
+                emptySlot.style.background = 'transparent';
+            }
+
+            // Reset highlight states
+            document.querySelectorAll('.desk').forEach(d => {
+                d.classList.remove('selected-desk', 'drag-over');
+            });
+            document.querySelectorAll('.seat').forEach(s => {
+                s.classList.remove('selected');
+            });
+
+            setTimeout(() => {
+                html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    width: element.offsetWidth,
+                    height: element.offsetHeight,
+                    scrollX: 0,
+                    scrollY: 0
+                }).then(canvas => {
+                    try {
+                        const { jsPDF } = window.jspdf;
+                        const pdf = new jsPDF('p', 'mm', 'a4');
+
+                        const pdfWidth = 210;
+                        const pdfHeight = 297;
+                        const margin = 10;
+
+                        // Canvas đang ở scale 2 → mọi kích thước px phải nhân 2
+                        const scale = 2;
+                        const today = new Date().toLocaleDateString('vi-VN');
+                        const titleLine1 = 'SƠ ĐỒ CHỖ NGỒI PHÒNG HỌC';
+                        const titleLine2 = `Ngày xuất: ${today}`;
+
+                        // Vùng header: dòng 1 cỡ 18px thật → y=26px, dòng 2 cỡ 12px thật → y=46px
+                        // Tổng header = 60px thật = 120px ở scale 2
+                        const headerH = 60 * scale;
+
+                        const finalCanvas = document.createElement('canvas');
+                        finalCanvas.width = canvas.width;
+                        finalCanvas.height = canvas.height + headerH;
+
+                        const ctx = finalCanvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+                        // Dòng tiêu đề lớn — y = 28px thật → 56 ở scale 2
+                        ctx.fillStyle = '#1a237e';
+                        ctx.font = `bold ${18 * scale}px 'Segoe UI', Arial, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.fillText(titleLine1, finalCanvas.width / 2, 28 * scale);
+
+                        // Dòng ngày xuất — y = 46px thật → 92 ở scale 2
+                        ctx.fillStyle = '#555555';
+                        ctx.font = `${12 * scale}px 'Segoe UI', Arial, sans-serif`;
+                        ctx.fillText(titleLine2, finalCanvas.width / 2, 46 * scale);
+
+                        // Vẽ sơ đồ ngay bên dưới header
+                        ctx.drawImage(canvas, 0, headerH);
+
+                        const imgWidth = pdfWidth - margin * 2;
+                        const imgHeight = (finalCanvas.height * imgWidth) / finalCanvas.width;
+                        const maxHeight = pdfHeight - margin * 2;
+                        let finalHeight = imgHeight;
+                        let finalWidth = imgWidth;
+
+                        if (imgHeight > maxHeight) {
+                            const ratio = maxHeight / imgHeight;
+                            finalHeight = maxHeight;
+                            finalWidth = imgWidth * ratio;
+                        }
+
+                        const xOffset = (pdfWidth - finalWidth) / 2;
+                        pdf.addImage(finalCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', xOffset, margin, finalWidth, finalHeight);
+
+                        pdf.save('so-do-cho-ngoi.pdf');
+                        showToast('✅ Đã xuất PDF thành công!');
+                    } catch (pdfErr) {
+                        console.error('Lỗi tạo PDF:', pdfErr);
+                        showToast('❌ Lỗi khi tạo file PDF');
+                    } finally {
+                        restoreUI();
+                    }
+                }).catch(err => {
+                    console.error('Lỗi chụp màn hình:', err);
+                    showToast('❌ Lỗi khi chụp sơ đồ');
+                    restoreUI();
+                });
+            }, 200);
+        }
+
+        function updateStats() {
+            const filled = Object.keys(seats).filter(k => seats[k]).length;
+            document.getElementById('filledCount').textContent = `📝 Đã điền: ${filled}`;
+            document.getElementById('emptyCount').textContent = `⬜ Còn trống: ${TOTAL_SEATS - filled}`;
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('classroomSeats', JSON.stringify(seats));
+            localStorage.setItem('deskNames', JSON.stringify(deskNames));
+        }
+
+        function loadFromStorage() {
+            try {
+                const savedSeats = localStorage.getItem('classroomSeats');
+                if (savedSeats) seats = JSON.parse(savedSeats);
+                
+                const savedDeskNames = localStorage.getItem('deskNames');
+                if (savedDeskNames) deskNames = JSON.parse(savedDeskNames);
+                
+                const tp = localStorage.getItem('teacherPos');
+                if (tp) teacherPos = tp;
+
+                const tn = localStorage.getItem('teacherName');
+                if (tn) teacherName = tn;
+            } catch (e) {
+                console.error('Lỗi load storage:', e);
+            }
+        }
+
+        function showToast(message) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 3000);
+        }
+
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        document.getElementById('teacherModal').addEventListener('click', function(e) {
+            if (e.target === this) closeTeacherModal();
+        });
+        document.getElementById('deskNameModal').addEventListener('click', function(e) {
+            if (e.target === this) closeDeskNameModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeTeacherModal();
+                closeDeskNameModal();
+                if (swapMode) toggleSwapMode(swapMode);
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
